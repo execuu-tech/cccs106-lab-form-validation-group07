@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 import flet as ft
+import math
 
 
 # TIER 3: DOMAIN DATA CONTRACT & CUSTOM EXCEPTIONS
@@ -47,18 +48,18 @@ class ScholarshipApplicant:
 
 
 class ScholarshipValidator:
-    """Scholarship input rules; unfinished validators explicitly raise errors."""
-
+    """Normalize scholarship inputs or raise a domain validation exception."""
+ 
     NAME_REGEX = re.compile(r"^[A-Za-z\s.\-',]{2,60}$")
     STUDENT_ID_REGEX = re.compile(r"^20\d{2}-\d{4,5}$")
     CSPC_EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@cspc\.edu\.ph$")
     PH_PHONE_REGEX = re.compile(r"^(?:\+63|0)9\d{9}$")
-
+ 
     @classmethod
     def sanitize_string(cls, raw: str | None) -> str:
         """Trim surrounding whitespace and treat None as an empty string."""
         return (raw or "").strip()
-
+ 
     @classmethod
     def validate_name(cls, value: str | None) -> str:
         """Return a trimmed name or raise ScholarshipValidationError."""
@@ -67,33 +68,63 @@ class ScholarshipValidator:
             raise ScholarshipValidationError("Full name is required.")
         if not cls.NAME_REGEX.fullmatch(clean):
             raise ScholarshipValidationError(
-                "Enter a valid name (2–60 letters, hyphens, or periods)."
+                "Enter a valid name (2\u201360 letters, hyphens, or periods)."
             )
         return clean
-
+ 
     @classmethod
     def validate_student_id(cls, value: str | None) -> str:
-        """TODO: Return a trimmed CSPC ID or raise IDFormatError."""
-        # TODO: Sanitize, check required input, and match STUDENT_ID_REGEX.
-        raise NotImplementedError("Student ID validation is not implemented yet.")
-
+        """Return a trimmed CSPC student ID or raise IDFormatError."""
+        clean = cls.sanitize_string(value)
+        if not clean:
+            raise IDFormatError("Student ID is required.")
+        if not cls.STUDENT_ID_REGEX.fullmatch(clean):
+            raise IDFormatError(
+                "Invalid Student ID. Expected format: YYYY-NNNN "
+                "(e.g., 2024-0123)."
+            )
+        return clean
+ 
     @classmethod
     def validate_email(cls, value: str | None) -> str:
-        """TODO: Return a lowercase CSPC email or raise EmailDomainError."""
-        # TODO: Sanitize, lowercase, check required input, and match CSPC_EMAIL_REGEX.
-        raise NotImplementedError("Email validation is not implemented yet.")
-
+        """Return a lowercase institutional email or raise EmailDomainError."""
+        clean = cls.sanitize_string(value).lower()
+        if not clean:
+            raise EmailDomainError("Institutional email is required.")
+        if not cls.CSPC_EMAIL_REGEX.fullmatch(clean):
+            raise EmailDomainError(
+                "Institutional email required (must end with @cspc.edu.ph)."
+            )
+        return clean
+ 
     @classmethod
     def validate_phone(cls, value: str | None) -> str:
-        """TODO: Return a local PH mobile number or raise ScholarshipValidationError."""
-        # TODO: Remove spaces/hyphens, match PH_PHONE_REGEX, and normalize +63 to 0.
-        raise NotImplementedError("Phone validation is not implemented yet.")
-
+        """Return a local PH mobile number or raise ScholarshipValidationError."""
+        clean = cls.sanitize_string(value).replace(" ", "").replace("-", "")
+        if not clean:
+            raise ScholarshipValidationError("Mobile number is required.")
+        if not cls.PH_PHONE_REGEX.fullmatch(clean):
+            raise ScholarshipValidationError(
+                "Invalid mobile number. Expected: 09XXXXXXXXX or +639XXXXXXXXX."
+            )
+        if clean.startswith("+63"):
+            clean = "0" + clean[3:]
+        return clean
+ 
     @classmethod
     def validate_gwa(cls, value: str | None) -> float:
-        """TODO: Return a rounded, finite GWA in 1.00–5.00 or raise GWARangeError."""
-        # TODO: Parse defensively, reject non-finite/out-of-range values, and round.
-        raise NotImplementedError("GWA validation is not implemented yet.")
+        """Return a rounded, finite GWA in 1.00-5.00 or raise GWARangeError."""
+        clean = cls.sanitize_string(value)
+        numeric_error = "GWA must be a valid number between 1.00 and 5.00."
+        try:
+            gwa = float(clean)
+        except (ValueError, TypeError) as err:
+            raise GWARangeError(numeric_error) from err
+        if not math.isfinite(gwa):
+            raise GWARangeError(numeric_error)
+        if not 1.00 <= gwa <= 5.00:
+            raise GWARangeError("GWA must be between 1.00 and 5.00.")
+        return round(gwa, 2)
 
 
 # TIER 1: FLET PRESENTATION LAYER
