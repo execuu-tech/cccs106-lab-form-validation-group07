@@ -1,7 +1,6 @@
-"""CCCS 106 Week 5: CSPC Scholarship Intake Portal starter scaffold.
+"""CCCS 106 Week 5: COMPLETED CSPC Scholarship Intake Portal.
 
 Target: Python 3.12+ and Flet 0.86.5.
-Complete the Tier 2 validators and Tier 1 submission TODOs in later phases.
 """
 
 import re
@@ -131,17 +130,16 @@ class ScholarshipValidator:
 
 
 def main(page: ft.Page) -> None:
-    """Build the runnable form without accepting unfinished applications."""
+    """Build the validated, session-only scholarship intake interface."""
     page.title = "CSPC Scholarship Intake Portal"
     page.window.width = 620
     page.window.height = 780
     page.window.resizable = False
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 25
-
-    # TODO: Append verified records here after completing the submission pipeline.
+ 
     approved_applicants: list[ScholarshipApplicant] = []
-
+ 
     name_field = ft.TextField(
         label="Full Name",
         hint_text="e.g., Maria Clara Santos",
@@ -185,50 +183,110 @@ def main(page: ft.Page) -> None:
         ],
     )
     status_summary = ft.Text(
-        value="Starter scaffold: validation and submission pending.",
+        value="Ready to accept applications.",
         color=ft.Colors.GREY_400,
         size=13,
     )
-
+ 
+    recent_cards = ft.Column(spacing=10)
+    recent_section = ft.Column(
+        controls=[
+            ft.Text(
+                "Recent Session Intake Contracts",
+                size=16,
+                weight=ft.FontWeight.BOLD,
+            ),
+            recent_cards,
+        ],
+        visible=False,
+        spacing=10,
+    )
+ 
+    def build_contract_card(applicant: ScholarshipApplicant) -> ft.Container:
+        """Render normalized values from an approved immutable record."""
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(applicant.full_name, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Student ID: {applicant.student_id}"),
+                    ft.Text(f"Email: {applicant.email}"),
+                    ft.Text(f"Mobile: {applicant.phone}"),
+                    ft.Text(f"GWA: {applicant.gwa:.2f}"),
+                    ft.Text(f"Program: {applicant.program}"),
+                    ft.Text(
+                        f"Submitted: {applicant.submitted_at:%Y-%m-%d %H:%M:%S}",
+                        size=12,
+                        color=ft.Colors.GREY_400,
+                    ),
+                ],
+                spacing=5,
+            ),
+            padding=14,
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border_radius=8,
+        )
+ 
     def clear_field_error(event: ft.Event[ft.TextField]) -> None:
         """Clear a text field's previous error when the user types."""
         if event.control.error is not None:
             event.control.error = None
             page.update()
-
+ 
     def clear_dropdown_error(event: ft.Event[ft.Dropdown]) -> None:
         """Clear the dropdown's previous error when a selection changes."""
         if event.control.error_text is not None:
             event.control.error_text = None
             page.update()
-
+ 
     text_fields = (name_field, id_field, email_field, phone_field, gwa_field)
     for text_field in text_fields:
         text_field.on_change = clear_field_error
     program_dropdown.on_select = clear_dropdown_error
-
+ 
     def submit_application(event: ft.Event[ft.FilledButton]) -> None:
-        """Run starter checks and stop before the unfinished validation pipeline."""
+        """Validate all fields before accepting and rendering one applicant."""
         has_errors = False
         for text_field in text_fields:
             text_field.error = None
         program_dropdown.error_text = None
-
+ 
         try:
             clean_name = ScholarshipValidator.validate_name(name_field.value)
         except ScholarshipValidationError as err:
             name_field.error = str(err)
             has_errors = True
-
-        # TODO: Validate ID, email, phone, and GWA in independent try/except blocks.
-        # Set each control's error and has_errors using the domain exception text.
-
-        if not program_dropdown.value:
+ 
+        try:
+            clean_id = ScholarshipValidator.validate_student_id(id_field.value)
+        except ScholarshipValidationError as err:
+            id_field.error = str(err)
+            has_errors = True
+ 
+        try:
+            clean_email = ScholarshipValidator.validate_email(email_field.value)
+        except ScholarshipValidationError as err:
+            email_field.error = str(err)
+            has_errors = True
+ 
+        try:
+            clean_phone = ScholarshipValidator.validate_phone(phone_field.value)
+        except ScholarshipValidationError as err:
+            phone_field.error = str(err)
+            has_errors = True
+ 
+        try:
+            clean_gwa = ScholarshipValidator.validate_gwa(gwa_field.value)
+        except ScholarshipValidationError as err:
+            gwa_field.error = str(err)
+            has_errors = True
+ 
+        allowed_programs = {option.key for option in program_dropdown.options}
+        if program_dropdown.value not in allowed_programs:
             program_dropdown.error_text = (
                 "Please select an accredited scholarship program."
             )
             has_errors = True
-
+ 
         if has_errors:
             page.show_dialog(
                 ft.SnackBar(
@@ -241,23 +299,34 @@ def main(page: ft.Page) -> None:
             )
             page.update()
             return
-
-        # TODO: Check program membership against the predefined dropdown options.
-        # TODO: Replace this starter stop after ALL validation checks are implemented.
-        # Create ScholarshipApplicant from clean values, append to approved_applicants,
-        # render a recent intake card, show success, reset inputs, and update the count.
+ 
+        applicant = ScholarshipApplicant(
+            full_name=clean_name,
+            student_id=clean_id,
+            email=clean_email,
+            phone=clean_phone,
+            gwa=clean_gwa,
+            program=program_dropdown.value,
+        )
+        approved_applicants.append(applicant)
+        recent_cards.controls.insert(0, build_contract_card(applicant))
+        recent_section.visible = True
+ 
         page.show_dialog(
             ft.SnackBar(
-                content=ft.Text(
-                    "Starter scaffold only: validation and submission are not "
-                    "implemented yet. No application was accepted."
-                ),
-                bgcolor=ft.Colors.BLUE_700,
+                content=ft.Text(f"Application accepted for {clean_name}!"),
+                bgcolor=ft.Colors.GREEN_700,
                 behavior=ft.SnackBarBehavior.FLOATING,
             )
         )
+        for text_field in text_fields:
+            text_field.value = ""
+        program_dropdown.value = None
+        status_summary.value = (
+            f"Total approved applicants: {len(approved_applicants)}"
+        )
         page.update()
-
+ 
     submit_button = ft.FilledButton(
         content=ft.Row(
             controls=[
@@ -270,12 +339,13 @@ def main(page: ft.Page) -> None:
         ),
         style=ft.ButtonStyle(
             bgcolor=ft.Colors.BLUE_700,
+            color=ft.Colors.WHITE,
             shape=ft.RoundedRectangleBorder(radius=8),
         ),
         height=48,
         on_click=submit_application,
     )
-
+ 
     page.add(
         ft.Column(
             controls=[
@@ -294,8 +364,8 @@ def main(page: ft.Page) -> None:
                                     weight=ft.FontWeight.BOLD,
                                 ),
                                 ft.Text(
-                                    "Office of Student Affairs & Services • "
-                                    "Academic Year 2026–2027",
+                                    "Office of Student Affairs & Services \u2022 "
+                                    "Academic Year 2026\u20132027",
                                     size=12,
                                     color=ft.Colors.GREY_400,
                                 ),
@@ -316,6 +386,7 @@ def main(page: ft.Page) -> None:
                 submit_button,
                 ft.Container(height=5),
                 status_summary,
+                recent_section,
             ],
             spacing=14,
             scroll=ft.ScrollMode.AUTO,
@@ -323,7 +394,6 @@ def main(page: ft.Page) -> None:
             expand=True,
         )
     )
-
 
 if __name__ == "__main__":
     ft.run(main)
